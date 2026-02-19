@@ -1,0 +1,58 @@
+---
+- name: Deploy Node.js Application
+  hosts: targets
+  become: yes
+
+  vars:
+    app_dir: /opt/nodeapp
+    artifact_name: nodeapp.tar.gz
+    app_port: 3000
+
+  tasks:
+
+    - name: Install Node.js and npm (RHEL-based)
+      yum:
+        name:
+          - nodejs
+          - npm
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy Node artifact
+      copy:
+        src: ../files/{{ artifact_name }}
+        dest: "{{ app_dir }}/{{ artifact_name }}"
+
+    - name: Unpack artifact
+      unarchive:
+        src: "{{ app_dir }}/{{ artifact_name }}"
+        dest: "{{ app_dir }}"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+
+
+    - name: Install npm dependencies
+      npm:
+        path: "{{ app_dir }}"
+
+    - name: Start Node.js application
+      shell: "nohup npm start > app.log 2>&1 &"
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Wait for application to start
+      wait_for:
+        port: "{{ app_port }}"
+        delay: 5
+        timeout: 30
+
+    - name: Verify application is responding
+      uri:
+        url: "http://localhost:{{ app_port }}"
+        status_code: 200

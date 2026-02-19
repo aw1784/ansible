@@ -1,0 +1,53 @@
+---
+- name: Deploy Simple Node App (Lab Mode)
+  hosts: targets
+  become: yes
+
+  vars:
+    app_dir: /opt/nodeapp
+    app_port: 3000
+
+  tasks:
+
+    - name: Install Node.js and npm
+      yum:
+        name:
+          - nodejs
+          - npm
+        state: present
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create simple Node app file
+      copy:
+        dest: "{{ app_dir }}/app.js"
+        content: |
+          const http = require('http');
+
+          const server = http.createServer((req, res) => {
+              res.writeHead(200, {'Content-Type': 'text/plain'});
+              res.end('Hello from Ansible Deployed App!\n');
+          });
+
+          server.listen({{ app_port }}, () => {
+              console.log('Server running on port {{ app_port }}');
+          });
+
+    - name: Start Node Application
+      shell: "nohup node app.js > app.log 2>&1 &"
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Wait for application to start
+      wait_for:
+        port: "{{ app_port }}"
+        timeout: 30
+
+    - name: Verify application
+      uri:
+        url: "http://localhost:{{ app_port }}"
+        status_code: 200
